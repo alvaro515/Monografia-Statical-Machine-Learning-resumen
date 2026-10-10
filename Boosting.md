@@ -34,11 +34,6 @@ Esta parte explica las fórmulas con palabras y con números sencillos. Lo impor
 | $\eta$ | Factor de contracción, un número entre 0 y 1 |
 | $K$ | Número de pliegues de la validación cruzada |
 
-Dos cosas de notación que aparecen todo el tiempo:
-
-- **Subíndices.** $w_3$ se lee "w sub 3" y es el peso de la fila 3. La letra de abajo solo indica de cuál fila o de cuál modelo se habla.
-- **Sumatoria.** El símbolo $\sum$ significa "sumar todos". Por ejemplo, $\sum_{i=1}^{3} w_i = w_1 + w_2 + w_3$. Si cada peso vale 0.2, el resultado es $0.2 + 0.2 + 0.2 = 0.6$.
-
 #### 2.2 AdaBoost
 
 La idea de AdaBoost en pocas palabras: se entrena un modelo, se mira qué filas clasificó mal, se les sube la importancia, es decir, el peso, y se entrena el siguiente modelo con esos pesos nuevos. Así el siguiente modelo se esfuerza más en las filas difíciles. Al final se combinan todos los modelos, y los que se equivocaron menos tienen más voz.
