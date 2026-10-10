@@ -58,9 +58,9 @@ Ejemplo: el primer modelo solo falla en D, que pesa 0.2, así que $e_1 = 0.2$. S
 
 **Paso 3. Decidir cuánta confianza se le da al modelo.**
 
-$$\alpha_m = \log\!\left(\frac{1 - e_m}{e_m}\right)$$
+$$\alpha_m = \ln\!\left(\frac{1 - e_m}{e_m}\right)$$
 
-Aquí $\log$ es el logaritmo natural, la tecla ln de la calculadora. Lo que importa es cómo se comporta: si el error es chico, $\alpha_m$ sale grande, y si el error es grande, sale chico.
+Aquí $\ln$ es el logaritmo natural. Lo que importa es cómo se comporta: si el error es minimo, $\alpha_m$ sale grande, y si el error es grande, sale minimo.
 
 Ejemplo con $e_1 = 0.2$: $\alpha_1 = \log(0.8 / 0.2) = \log(4) \approx 1.39$.
 
@@ -74,9 +74,9 @@ Con un error de 0.5 la confianza es 0: el modelo acierta tanto como una moneda a
 
 $$F_m = F_{m-1} + \alpha_m f_m$$
 
-Se lee así: el ensamble nuevo es el ensamble anterior más el modelo nuevo, y el modelo nuevo entra multiplicado por su confianza.
+El ensamble nuevo es el ensamble anterior más el modelo nuevo, y el modelo nuevo entra multiplicado por su confianza.
 
-**Paso 5. Subir el peso de las filas que falló.** Bruce et al. indican solo que los pesos de las filas mal clasificadas aumentan según $\alpha_m$. La forma habitual de hacerlo es multiplicar el peso de esas filas por $e^{\alpha_m}$ y después reescalar:
+**Paso 5. Subir el peso de las filas que falló.** Los pesos de las filas mal clasificadas aumentan según $\alpha_m$. La forma habitual de hacerlo es multiplicar el peso de esas filas por $e^{\alpha_m}$ y después reescalar:
 
 $$w_i \leftarrow w_i \cdot e^{\alpha_m} \quad \text{(solo si la fila } i \text{ fue mal clasificada)}$$
 
@@ -199,7 +199,6 @@ donde $E_k$ es el error medido en el pliegue $k$. Por ejemplo, con 5 pliegues y 
 
 ### 3. Aplicación en el código
 
-Librerías que se usan en los ejemplos:
 
 ```python
 import numpy as np
@@ -217,7 +216,7 @@ from itertools import product
 
 #### 3.1 Ejemplo
 
-Queremos detectar conexiones sospechosas en una red. De cada una se sabe cuántos intentos hace por minuto y a cuántos puertos distintos intenta entrar: una conexión normal usa uno o dos puertos, y quien escanea la red toca decenas. Hay 16 conexiones ya revisadas:
+Detectar conexiones sospechosas en una red. De cada una se sabe cuántos intentos hace por minuto y a cuántos puertos distintos intenta entrar: una conexión normal usa uno o dos puertos, y quien escanea la red toca decenas. Hay 16 conexiones ya revisadas:
 
 ```python
 datos = pd.DataFrame({
