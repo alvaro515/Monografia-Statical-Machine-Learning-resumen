@@ -135,7 +135,7 @@ Ejemplo: el valor real es 100, el primer modelo predice 80 y se usa $\eta = 0.5$
 
 En la ronda 1 faltan 20, pero el árbol solo aporta la mitad, que es 10, y la predicción sube a 90. En la ronda 2 faltan 10, se suma la mitad, que es 5, y así sucesivamente. La predicción se acerca a 100 en cada ronda. Con un $\eta$ más pequeño el avance es más lento, pero el modelo se sobreajusta menos.
 
-**¿Qué es el pseudo-residuo?** Es la versión general del residuo, para cuando el costo no es el error cuadrático. Se calcula con la derivada de la función de costo $L$:
+El pseudo-residuo es la versión general del residuo, para cuando el costo no es el error cuadrático. Se calcula con la derivada de la función de costo $L$:
 
 $$r_i = -\frac{\partial L\big(y_i,\, F_{m-1}(x_i)\big)}{\partial F}$$
 
@@ -204,6 +204,8 @@ donde $E_k$ es el error medido en el pliegue $k$. Por ejemplo, con 5 pliegues y 
 
 ### 3. Aplicación en el código
 
+Librerías que se usan en los ejemplos:
+
 ```python
 import numpy as np
 import pandas as pd
@@ -212,106 +214,198 @@ from sklearn.model_selection import train_test_split
 from itertools import product
 ```
 
-Se usan cinco librerías:
+- **numpy**, abreviada np, sirve para hacer cálculos con números, como promedios o números al azar.
+- **pandas**, abreviada pd, sirve para trabajar con tablas de datos.
+- **xgboost** trae el modelo de boosting. De ahí se importa la clase XGBClassifier.
+- **scikit-learn**, abreviada sklearn, ayuda a separar los datos en una parte para entrenar y otra para probar, con train_test_split.
+- **itertools** permite armar todas las combinaciones posibles de valores con product, algo útil cuando se prueban varios hiperparámetros.
 
-- **numpy**, abreviada np: cálculos con números.
-- **pandas**, abreviada pd: tablas de datos.
-- **xgboost**: el modelo de boosting, con la clase XGBClassifier.
-- **scikit-learn**, abreviada sklearn: dividir los datos en entrenamiento y prueba, con train_test_split.
-- **itertools**: armar combinaciones, con product.
+#### 3.1 Ejemplo
 
-Los nombres de las variables están en español. Los de las librerías y los de las columnas de los datos no se pueden traducir.
+Queremos detectar conexiones sospechosas en una red. De cada una se sabe cuántos intentos hace por minuto y a cuántos puertos distintos intenta entrar: una conexión normal usa uno o dos puertos, y quien escanea la red toca decenas. Hay 16 conexiones ya revisadas:
+
+```python
+datos = pd.DataFrame({
+    'intentos_por_minuto': [2, 3, 5, 4, 6, 3, 2, 50, 80, 120, 90, 150, 70, 5, 60, 110],
+    'puertos_distintos':   [1, 1, 2, 1, 2, 1, 1, 40, 60, 200, 35, 150, 80, 3, 25, 90],
+    'sospechoso':          [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1]
+})
+
+X = datos[['intentos_por_minuto', 'puertos_distintos']]
+y = datos['sospechoso']
+
+modelo = XGBClassifier(objective='binary:logistic', n_estimators=50,
+                       max_depth=2, learning_rate=0.3)
+modelo.fit(X, y)
+
+nuevos = pd.DataFrame({'intentos_por_minuto': [90, 4], 'puertos_distintos': [45, 2]})
+
+print(modelo.predict_proba(nuevos)[:, 1])
+print(modelo.predict(nuevos))
+```
+
+La columna sospechoso vale 1 si la conexión era un ataque y 0 si era normal. Es la que se quiere predecir, así que va en y, y las otras dos columnas van en X.
+
+XGBClassifier crea el modelo vacío. objective='binary:logistic' indica que hay dos respuestas posibles, n_estimators=50 que se construyen 50 árboles en secuencia (sección 2), max_depth=2 que cada árbol es pequeño y learning_rate=0.3 es el $\eta$ de las fórmulas. fit entrena el modelo.
+
+Luego se prueban dos conexiones nuevas: una con 90 intentos por minuto a 45 puertos y otra con 4 intentos a 2 puertos. predict_proba da la probabilidad de que sean sospechosas y predict da la clase, 1 o 0.
+
+Se ejecutó esto y salió:
+
+```
+[0.8663118 0.1336882]
+[1 0]
+```
+
+La primera tiene 87 % de probabilidad de ser sospechosa y el modelo predice 1. La segunda tiene 13 % y predice 0. Los demás ejemplos siguen estos mismos pasos y solo cambian los datos y los hiperparámetros.
 
 ---
 
-### 4. Ejemplo 1: XGBoost
+### 4. Ejemplo 1: XGBoost con dos variables
+
+Con 16 conexiones no se puede comprobar mucho, así que ahora se crean 400 con datos inventados:
 
 ```python
-predictores = ['borrower_score', 'payment_inc_ratio']
-resultado = 'outcome'
+np.random.seed(1)
+n = 400
 
-X = prestamos_3000[predictores]
-y = prestamos_3000[resultado]
+datos = pd.DataFrame({
+    'intentos_por_minuto': np.random.randint(1, 200, n),
+    'puertos_distintos': np.random.randint(1, 100, n),
+    'hora': np.random.randint(0, 24, n),
+    'bytes_promedio': np.random.randint(40, 1500, n)
+})
+
+z = 0.05 * datos['intentos_por_minuto'] + 0.1 * datos['puertos_distintos'] - 10
+probabilidad = 1 / (1 + np.exp(-z))
+datos['sospechoso'] = (np.random.uniform(size=n) < probabilidad).astype(int)
+
+print(datos.head())
+```
+
+Se ejecutó esto y salió:
+
+```
+   intentos_por_minuto  puertos_distintos  hora  bytes_promedio  sospechoso
+0                   38                 98    21            1269           1
+1                  141                 39    16            1426           0
+2                   73                 64    19            1480           0
+3                  138                 47    22             560           1
+4                  134                 90     5             944           1
+```
+
+np.random.seed(1) hace que los números al azar sean siempre los mismos. Los datos se armaron para que una conexión sea sospechosa según sus intentos por minuto y sus puertos distintos, con algo de azar. Las columnas hora y bytes_promedio no influyen en nada y se dejan para el ejemplo 2.
+
+Ahora se entrena con las dos columnas que sí importan:
+
+```python
+predictores = ['intentos_por_minuto', 'puertos_distintos']
+resultado = 'sospechoso'
+
+X = datos[predictores]
+y = datos[resultado]
 
 modelo = XGBClassifier(objective='binary:logistic', subsample=0.63)
 modelo.fit(X, y)
+
+nuevos = pd.DataFrame({'intentos_por_minuto': [150, 10], 'puertos_distintos': [80, 5]})
+print(modelo.predict_proba(nuevos)[:, 1])
 ```
 
-prestamos_3000 es una tabla de 3000 préstamos. En el libro se llama loan3000. borrower_score es el puntaje del cliente, payment_inc_ratio es la cuota respecto al ingreso y outcome indica si el préstamo se pagó.
+Se ejecutó esto y salió:
 
-Qué hace: toma dos columnas de los préstamos, el puntaje del cliente y la cuota respecto al ingreso, crea un modelo XGBoost con XGBClassifier y lo entrena con fit para que aprenda a predecir si un préstamo se paga o no. El argumento subsample=0.63 hace que cada árbol use solo el 63 % de las filas.
+```
+[0.9986865 0.0018378]
+```
 
-En Python, eta se llama learning_rate. Usar eta no da error, pero no tiene efecto.
+Es el mismo procedimiento. La novedad es subsample=0.63: cada árbol se construye con un 63 % de las filas elegidas al azar, y eso lo convierte en stochastic gradient boosting. La conexión con 150 intentos a 80 puertos casi seguro es sospechosa y la de 10 intentos a 5 puertos casi seguro es normal.
+
+En Python el factor de contracción se llama learning_rate. Si se escribe eta no da error, pero no tiene efecto.
 
 ---
 
 ### 5. Ejemplo 2: sobreajuste
 
+Ahora el modelo recibe las cuatro columnas, incluidas hora y bytes_promedio, y se deja aprender sin freno:
+
 ```python
-predictores = ['loan_amnt', 'term', 'annual_inc', 'dti', 'payment_inc_ratio',
-               'revol_bal', 'revol_util', 'purpose', 'delinq_2yrs_zero',
-               'pub_rec_zero', 'open_acc', 'grade', 'emp_length', 'purpose_',
-               'home_', 'emp_len_', 'borrower_score']
-resultado = 'outcome'
+predictores = ['intentos_por_minuto', 'puertos_distintos', 'hora', 'bytes_promedio']
+X = datos[predictores]
+y = datos['sospechoso']
 
-X = pd.get_dummies(datos_prestamos[predictores], drop_first=True)
-y = pd.Series([1 if o == 'default' else 0 for o in datos_prestamos[resultado]])
-
-X_entren, X_prueba, y_entren, y_prueba = train_test_split(X, y, test_size=10000)
+X_entren, X_prueba, y_entren, y_prueba = train_test_split(X, y, test_size=100, random_state=0)
 
 modelo_defecto = XGBClassifier(objective='binary:logistic', n_estimators=250,
                                max_depth=6, reg_lambda=0, learning_rate=0.3,
                                subsample=1)
 modelo_defecto.fit(X_entren, y_entren)
 
-pred_defecto = modelo_defecto.predict_proba(X_prueba)[:, 1]
-error_defecto = abs(y_prueba - pred_defecto) > 0.5
-print('defecto: ', np.mean(error_defecto))
+pred_entren = modelo_defecto.predict_proba(X_entren)[:, 1]
+pred_prueba = modelo_defecto.predict_proba(X_prueba)[:, 1]
+
+print('entrenamiento: ', np.mean(abs(y_entren - pred_entren) > 0.5))
+print('prueba: ', np.mean(abs(y_prueba - pred_prueba) > 0.5))
 ```
 
-datos_prestamos es la tabla completa de préstamos. En el libro se llama loan_data.
+train_test_split aparta 100 conexiones para probar y deja 300 para entrenar. random_state=0 fija la separación. El modelo usa 250 árboles de profundidad 6 sin penalización (reg_lambda=0) y el error se mide con la regla de la sección 2.5.
 
-Qué hace: usa 17 columnas de los préstamos y convierte el texto a números con get_dummies. Separa 10,000 préstamos para probar con train_test_split y entrena con el resto un modelo XGBoost con la configuración por defecto, usando XGBClassifier y fit. Después calcula con predict_proba la probabilidad de incumplimiento de los préstamos de prueba y mide en qué porcentaje se equivoca.
+Se ejecutó esto y salió:
 
-Resultado: 13.3 % de error en entrenamiento y 35.3 % en prueba. Esa diferencia indica sobreajuste: el modelo funciona bien con los datos que ya vio, pero no con datos nuevos.
+```
+entrenamiento:  0.0
+prueba:  0.18
+```
+
+En entrenamiento no falla nunca, pero con conexiones que no vio falla el 18 %. Eso es sobreajuste: el modelo memorizó las 300 conexiones, ruido incluido, y no generaliza.
 
 ---
 
 ### 6. Ejemplo 3: regularización
 
+Es el mismo ejemplo y los mismos datos, pero con tres cambios para frenar el sobreajuste:
+
 ```python
 modelo_penalizado = XGBClassifier(objective='binary:logistic', n_estimators=250,
-                                  max_depth=6, reg_lambda=1000, learning_rate=0.1,
+                                  max_depth=6, reg_lambda=10, learning_rate=0.1,
                                   subsample=0.63)
 modelo_penalizado.fit(X_entren, y_entren)
 
-pred_penalizado = modelo_penalizado.predict_proba(X_prueba)[:, 1]
-error_penalizado = abs(y_prueba - pred_penalizado) > 0.5
-print('penalizado: ', np.mean(error_penalizado))
+pred_entren = modelo_penalizado.predict_proba(X_entren)[:, 1]
+pred_prueba = modelo_penalizado.predict_proba(X_prueba)[:, 1]
+
+print('entrenamiento: ', np.mean(abs(y_entren - pred_entren) > 0.5))
+print('prueba: ', np.mean(abs(y_prueba - pred_prueba) > 0.5))
 ```
 
-Qué hace: lo mismo que el ejemplo 2, pero con regularización. Solo cambian tres argumentos de XGBClassifier:
-
-| | | | |
-|---|---|---|---|
 | Argumento | Antes | Ahora | Efecto |
-| reg_lambda | 0 | 1000 | Aplica una penalización L2 fuerte a los árboles complejos. |
+|---|---|---|---|
+| reg_lambda | 0 | 10 | Aplica una penalización L2 a los árboles complejos. |
 | learning_rate | 0.3 | 0.1 | Reduce el tamaño de cada paso. |
 | subsample | 1 | 0.63 | Cada árbol usa solo una parte de las filas. |
 
-reg_alpha es el argumento de la penalización L1. En R los parámetros se llaman lambda y alpha.
+reg_lambda vale 10 porque son pocos datos; con tablas grandes se usan valores mucho más altos. La penalización L1 se activa con reg_alpha. En R los parámetros se llaman lambda y alpha.
 
-Resultado del ejemplo en R de Bruce et al.: 31.0 % de error en entrenamiento y 32.9 % en prueba. Los dos errores quedan cercanos: el modelo ya no se sobreajusta.
+Se ejecutó esto y salió:
+
+```
+entrenamiento:  0.04666666666666667
+prueba:  0.15
+```
+
+Ahora el error es 4.7 % en entrenamiento y 15 % en prueba. Pierde algo de precisión en entrenamiento, pero con conexiones nuevas mejora (antes 18 %) y la diferencia entre los dos errores baja de 18 a unos 10 puntos. Ya no memoriza.
 
 ---
 
 ### 7. Ejemplo 4: validación cruzada
 
+Hasta ahora eta y max_depth se elegían a ojo. Con validación cruzada se prueban varios valores y se elige el mejor:
+
 ```python
 grupos = np.random.choice(range(5), size=len(X), replace=True)
 errores = []
-for eta, profundidad in product([0.1, 0.5, 0.9], [3, 6, 9]):
-    modelo = XGBClassifier(objective='binary:logistic', n_estimators=250,
+
+for eta, profundidad in product([0.1, 0.5, 0.9], [2, 4, 8]):
+    modelo = XGBClassifier(objective='binary:logistic', n_estimators=100,
                            max_depth=profundidad, learning_rate=eta)
     errores_pliegues = []
     for k in range(5):
@@ -327,32 +421,35 @@ for eta, profundidad in product([0.1, 0.5, 0.9], [3, 6, 9]):
         'profundidad': profundidad,
         'error_promedio': np.mean(errores_pliegues)
     })
-    print(errores[-1])
+
 tabla_errores = pd.DataFrame(errores)
+print(tabla_errores.round(3))
 ```
 
-Qué hace: reparte los datos al azar en 5 grupos con np.random.choice. Para cada una de las 9 combinaciones de eta y profundidad, que arma product, entrena el modelo 5 veces, dejando fuera un grupo distinto cada vez para probarlo. Con eso obtiene el error promedio de cada combinación y al final los junta en una tabla con pd.DataFrame para compararlos.
+np.random.choice reparte las conexiones al azar en 5 grupos y product arma las 9 combinaciones de eta y profundidad. Cada combinación se entrena 5 veces, apartando un grupo distinto para probar, y se promedian los 5 errores. Son 45 modelos: con 400 filas es rápido, con tablas grandes puede tardar.
 
-Son 9 combinaciones por 5 grupos, es decir, 45 modelos, así que puede tardar.
+Se ejecutó esto y salió:
 
-Resultados, error promedio en porcentaje:
+```
+   eta  profundidad  error_promedio
+0  0.1            2           0.146
+1  0.1            4           0.166
+2  0.1            8           0.159
+3  0.5            2           0.190
+4  0.5            4           0.160
+5  0.5            8           0.159
+6  0.9            2           0.184
+7  0.9            4           0.166
+8  0.9            8           0.159
+```
 
-| | | | |
-|---|---|---|---|
-| eta | max_depth 3 | max_depth 6 | max_depth 12 |
-| 0.1 | 32.90 | 33.08 | 34.56 |
-| 0.5 | 33.43 | 35.60 | 36.83 |
-| 0.9 | 34.36 | 37.82 | 38.18 |
-
-La mejor combinación es eta=0.1 con max_depth=3, o posiblemente 6: árboles poco profundos y un factor de contracción pequeño dan resultados más exactos y estables.
-
-Nota: el código en Python de Bruce et al. usa max_depth 3, 6 y 9, pero la tabla corresponde al código en R, que usa 3, 6 y 12.
+La mejor es eta=0.1 con max_depth=2, con 14.6 % de error. Las demás quedan entre 15.9 % y 19 %. Con estos datos conviene un eta pequeño y árboles poco profundos.
 
 ---
 
 ### 8. Hiperparámetros de XGBoost
 
-| | |
+| Hiperparámetro | Qué controla |
 |---|---|
 | eta / learning_rate | Factor de contracción entre 0 y 1. Controla el tamaño de cada paso. Con datos ruidosos se recomiendan valores pequeños, como 0.1. |
 | nrounds / n_estimators | Número de rondas, es decir, de árboles. Si eta es pequeño, se necesitan más rondas. |
