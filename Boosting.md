@@ -208,10 +208,10 @@ from sklearn.model_selection import train_test_split
 from itertools import product
 ```
 
-- **numpy**, abreviada np, sirve para hacer cálculos con números, como promedios o números al azar.
-- **pandas**, abreviada pd, sirve para trabajar con tablas de datos.
+- **numpy**,  sirve para hacer cálculos con números, como promedios o números al azar.
+- **pandas**,  sirve para trabajar con tablas de datos.
 - **xgboost** trae el modelo de boosting. De ahí se importa la clase XGBClassifier.
-- **scikit-learn**, abreviada sklearn, ayuda a separar los datos en una parte para entrenar y otra para probar, con train_test_split.
+- **scikit-learn**, ayuda a separar los datos en una parte para entrenar y otra para probar, con train_test_split.
 - **itertools** permite armar todas las combinaciones posibles de valores con product, algo útil cuando se prueban varios hiperparámetros.
 
 #### 3.1 Ejemplo
