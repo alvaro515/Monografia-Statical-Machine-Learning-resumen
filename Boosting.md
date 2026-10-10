@@ -12,33 +12,6 @@ Existen tres variantes principales:
 | Gradient boosting | Plantea el problema como la minimización de una función de costo. Cada modelo nuevo se ajusta al pseudo-residuo, es decir, a lo que aún no explica el conjunto. |
 | Stochastic gradient boosting | Igual que el anterior, pero en cada ronda usa una muestra aleatoria de filas y de columnas. Es la variante más general y la más usada. |
 
-#### Términos básicos
-
-| Término | Qué significa | Ejemplo |
-|---|---|---|
-| Observación (fila) | Un caso individual dentro de la tabla de datos. | Un préstamo. |
-| Variable predictora (columna) | Característica que se usa para predecir. | `borrower_score`, el puntaje del cliente. |
-| Variable respuesta (`outcome`) | Lo que se quiere predecir. | Si el préstamo se pagó o no. |
-| Modelo | Regla que se aprende de los datos para hacer predicciones. | Un árbol de decisión. |
-| Entrenar (`fit`) | Hacer que el modelo aprenda a partir de los datos. | `xgb.fit(X, y)`. |
-| Conjunto de entrenamiento | Datos con los que el modelo aprende. | Todas las filas menos las 10,000 de prueba. |
-| Conjunto de prueba | Datos que el modelo no vio al entrenar, usados para evaluarlo. | 10,000 filas reservadas. |
-| Árbol de decisión | Serie de preguntas de sí/no que termina en una predicción. | ¿`borrower_score` > 0.5? |
-| Ensamble | Conjunto de modelos cuyas predicciones se combinan. | 250 árboles trabajando juntos. |
-| Peso | Número que indica la importancia de una observación o de un modelo. | Un peso de 0.5 pesa más que uno de 0.125. |
-| Error | Proporción de predicciones incorrectas. | 35.3 % de error en prueba. |
-| Residuo | Diferencia entre el valor real y el predicho. | Real 100, predicho 80: residuo 20. |
-| Pseudo-residuo | Residuo generalizado a cualquier función de costo; es lo que ajusta cada modelo en gradient boosting. | Con error cuadrático coincide con el residuo. |
-| Función de costo | Medida de qué tan mal predice el modelo. | El error cuadrático. |
-| Probabilidad | Número entre 0 y 1 que expresa qué tan probable es un resultado. | 0.8 = 80 % de probabilidad de incumplimiento. |
-| Factor de contracción (`eta`) | Número entre 0 y 1 que reduce el aporte de cada árbol nuevo. | `eta = 0.1`. |
-| Sobreajuste | El modelo se ajusta demasiado a los datos de entrenamiento y falla con datos nuevos. | 13.3 % de error en entrenamiento y 35.3 % en prueba. |
-| Regularización | Penalización a la complejidad del modelo para evitar el sobreajuste. | `reg_lambda=1000`. |
-| Hiperparámetro | Parámetro que se fija antes de entrenar. | `max_depth`, `n_estimators`. |
-| Pliegue (fold) | Cada uno de los grupos en que se divide el dato en la validación cruzada. | 5 pliegues. |
-| Validación cruzada | Evaluar el modelo varias veces usando un pliegue distinto como prueba. | Entrenar 5 veces y promediar el error. |
-
----
 
 ### 2. Fórmulas
 
