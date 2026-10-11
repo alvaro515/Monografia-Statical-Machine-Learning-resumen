@@ -248,7 +248,7 @@ print(modelo.predict(nuevos))
 
 La columna sospechoso vale 1 si la conexión era un ataque y 0 si era normal. Es la que se quiere predecir, así que va en y, y las otras dos columnas van en X.
 
-XGBClassifier crea el modelo vacío. objective='binary:logistic' indica que hay dos respuestas posibles, n_estimators=50 que se construyen 50 árboles en secuencia (sección 2), max_depth=2 que cada árbol es pequeño y learning_rate=0.3 es el $\eta$ de las fórmulas. fit entrena el modelo.
+XGBClassifier crea el modelo vacío. objective='binary:logistic' indica que hay dos respuestas posibles, n_estimators=50 que se construyen 50 árboles en secuencia, max_depth=2 que cada árbol es pequeño y learning_rate=0.3 es el $\eta$ de las fórmulas. fit entrena el modelo.
 
 Luego se prueban dos conexiones nuevas: una con 90 intentos por minuto a 45 puertos y otra con 4 intentos a 2 puertos. predict_proba da la probabilidad de que sean sospechosas y predict da la clase, 1 o 0.
 
