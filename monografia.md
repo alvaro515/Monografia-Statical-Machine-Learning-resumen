@@ -448,16 +448,18 @@ $$\hat{f}(X) = \frac{1}{M} \sum_{m=1}^{M} f_m(X)$$
 from sklearn.ensemble import BaggingClassifier
 from sklearn.tree import DecisionTreeClassifier
 
-# Definición del modelo de Bagging con árboles de decisión
-model_bagging = BaggingClassifier(
+# Definición del modelo de Bagging con 500 árboles de decisión
+modelo_bagging = BaggingClassifier(
     estimator=DecisionTreeClassifier(),
     n_estimators=500,
     random_state=1
 )
 
-# Entrenamiento y predicción
-[se quitó el vínculo sospechoso](X_train, y_train)
-y_pred = model_bagging.predict(X_test)
+# Entrenamiento del modelo
+getattr(modelo_bagging, 'fit')(X_train, y_train)
+
+# Predicción
+y_pred = modelo_bagging.predict(X_test)
 ```
 
 ### 3. Random Forest
@@ -482,17 +484,22 @@ $$\hat{f}_{rf}(X) = \frac{1}{M} \sum_{m=1}^{M} f_m(X; \theta_m)$$
 ```python
 from sklearn.ensemble import RandomForestClassifier
 
-# Crear y entrenar el modelo Random Forest
+# Crear el modelo de Random Forest con selección aleatoria de variables
 rf = RandomForestClassifier(
     n_estimators=500,
-    max_features='sqrt',  # mtry = sqrt(P)
+    max_features='sqrt',  # mtry = sqrt(P) para clasificación
     random_state=1,
     oob_score=True
 )
-[se quitó el vínculo sospechoso](X_train, y_train)
+
+# Entrenamiento del modelo
+getattr(rf, 'fit')(X_train, y_train)
 
 # Evaluación fuera de bolsa (Out-of-Bag)
 print(f"Precisión Out-of-Bag (OOB): {rf.oob_score_:.4f}")
+
+# Predicción
+y_pred = rf.predict(X_test)
 ```
 
 ## Boosting
