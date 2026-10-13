@@ -4,6 +4,419 @@
 
 ## Tree  Models
 
+### 1. Introducción
+
+Un árbol de decisión es un modelo que predice haciendo preguntas de sí o no sobre las variables, una tras otra, hasta llegar a una respuesta. Se parece a un diagrama de flujo: "¿los puertos distintos son más de 14? Si es así, la conexión es sospechosa". Cada pregunta divide los datos en dos grupos y el proceso se repite dentro de cada grupo. Este es el algoritmo CART (*Classification and Regression Trees*), propuesto por Breiman, Friedman, Olshen y Stone en 1984.
+
+| Elemento | Qué es |
+| --- | --- |
+| Nodo raíz | La primera pregunta, que usa todos los datos. |
+| Nodo interno | Una pregunta intermedia que divide los datos en dos ramas. |
+| Hoja | Un grupo final, sin más preguntas. Aquí se da la predicción. |
+| Profundidad | Cantidad máxima de preguntas seguidas desde la raíz hasta una hoja. |
+
+Lo que hace el árbol es partir el espacio de las variables en rectángulos y dar una predicción por rectángulo. Sirve para dos tareas:
+
+- **Clasificación**: la hoja predice la clase más frecuente de sus observaciones, y la proporción de esa clase da la probabilidad.
+- **Regresión**: la hoja predice el promedio de $y$ de sus observaciones.
+
+Entre sus ventajas están que se lee fácilmente, no necesita escalar las variables y capta relaciones no lineales e interacciones sin que haya que indicarlas. Su principal debilidad es que es inestable: un cambio pequeño en los datos puede producir un árbol muy distinto, es decir, tiene varianza alta. Si se deja crecer sin límite, memoriza los datos. Esa debilidad es el punto de partida del bagging y del bosque aleatorio, que se ven en la sección siguiente.
+
+---
+
+### 2. Comprenderlo matemáticamente
+
+Esta parte explica cómo el árbol elige sus preguntas. La idea de fondo: en cada nodo se prueban muchos cortes posibles y se elige el que deja los dos grupos más "puros", es decir, con observaciones de una sola clase.
+
+#### 2.1 Notación
+
+| Símbolo | Significado |
+| --- | --- |
+| $N$ | Número de filas, o sea, observaciones |
+| $P$ | Número de variables predictoras |
+| $t$ | Un nodo del árbol; $N_t$ es cuántas observaciones tiene |
+| $t_L$, $t_R$ | Los nodos hijos de la izquierda y de la derecha |
+| $j$, $s$ | Variable elegida para el corte y valor de corte: $X_j \le s$ va a la izquierda |
+| $K$ | Número de clases (en clasificación) |
+| $p_k$ | Proporción de observaciones de la clase $k$ dentro del nodo |
+| $I(t)$ | Impureza del nodo $t$: qué tan mezcladas están sus clases |
+| $\Delta I$ | Reducción de impureza que produce un corte |
+| $\lvert T \rvert$ | Número de hojas del árbol $T$ |
+| $\alpha$ | Penalización por hoja en la poda, un número mayor o igual a 0 |
+
+#### 2.2 Medir qué tan mezclado está un nodo
+
+En clasificación hay dos medidas comunes:
+
+$$G(t) = \sum_{k=1}^{K} p_k (1 - p_k) = 1 - \sum_{k=1}^{K} p_k^2 \qquad \text{(Impureza Gini)}$$
+
+$$H(t) = -\sum_{k=1}^{K} p_k \log_2 p_k \qquad \text{(Entropía)}$$
+
+Las dos valen 0 cuando el nodo es puro, es decir, cuando todas sus observaciones son de la misma clase, y crecen cuanto más mezcladas están. Con dos clases, el Gini máximo es 0.5, cuando hay mitad y mitad. En regresión se usa la varianza de $y$ dentro del nodo:
+
+$$I(t) = \frac{1}{N_t} \sum_{i \in t} (y_i - \bar{y}_t)^2$$
+
+donde $\bar{y}_t$ es el promedio de $y$ en el nodo.
+
+#### 2.3 Elegir el mejor corte
+
+Para cada variable $j$ y cada valor de corte $s$, se calcula cuánto baja la impureza al dividir el nodo en dos:
+
+$$\Delta I = I(t) - \frac{N_L}{N_t} I(t_L) - \frac{N_R}{N_t} I(t_R)$$
+
+Cada hijo cuenta en proporción a su tamaño, porque un hijo pequeño y puro importa menos que uno grande y puro. El corte elegido es el $(j, s)$ con mayor $\Delta I$. Como los valores de corte posibles son los puntos medios entre valores consecutivos de la variable, el árbol los revisa todos.
+
+El algoritmo completo, llamado partición binaria recursiva, es:
+
+1. Se parte del nodo raíz con todas las observaciones.
+2. En el nodo actual se prueban todos los cortes $(j, s)$ y se escoge el de mayor $\Delta I$.
+3. Se divide el nodo en dos hijos y se repite el paso 2 en cada uno.
+4. Se detiene un nodo cuando es puro o cuando se cumple una regla de parada, como una profundidad máxima o un mínimo de observaciones por hoja.
+
+Es un algoritmo **voraz** (*greedy*): en cada nodo toma el mejor corte de ese momento, sin mirar si otro corte peor ahora permitiría mejores cortes después.
+
+#### 2.4 Ejemplo con números
+
+Con las 16 conexiones de la sección 3.1, hay 8 normales y 8 sospechosas. El nodo raíz está totalmente mezclado:
+
+$$G(\text{raíz}) = 1 - \left(\tfrac{8}{16}\right)^2 - \left(\tfrac{8}{16}\right)^2 = 0.5$$
+
+Se prueban dos cortes. Primero, intentos por minuto $\le 5.5$: a la izquierda quedan 7 conexiones, todas normales ($G = 0$), y a la derecha 9, de las cuales 1 es normal y 8 sospechosas:
+
+$$G(t_R) = 1 - \left(\tfrac{1}{9}\right)^2 - \left(\tfrac{8}{9}\right)^2 = 0.198$$
+
+$$\Delta G = 0.5 - \tfrac{7}{16}(0) - \tfrac{9}{16}(0.198) = 0.5 - 0.111 = 0.389$$
+
+Segundo, puertos distintos $\le 14$: a la izquierda quedan las 8 conexiones normales y a la derecha las 8 sospechosas. Ambos hijos son puros:
+
+$$\Delta G = 0.5 - \tfrac{8}{16}(0) - \tfrac{8}{16}(0) = 0.5$$
+
+El segundo corte reduce más la impureza (0.5 frente a 0.389), así que el árbol lo elige. Como los dos hijos ya son puros, no hay nada más que dividir.
+
+#### 2.5 Predicción
+
+Para predecir una observación nueva se la hace bajar por el árbol según las respuestas a cada pregunta, hasta llegar a una hoja. En clasificación, la probabilidad de la clase $k$ es la proporción $p_k$ de esa hoja. En regresión, la predicción es el promedio $\bar{y}$ de la hoja.
+
+#### 2.6 Cuándo parar: la poda
+
+Un árbol que crece hasta que todas sus hojas son puras clasifica sin error los datos de entrenamiento, pero memoriza el ruido. Hay dos formas de controlarlo. La primera es detener el crecimiento antes, con una profundidad máxima o un mínimo de observaciones por hoja. La segunda, la **poda por costo-complejidad**, deja crecer el árbol completo y luego elimina ramas. Para un árbol $T$ se minimiza:
+
+$$C_\alpha(T) = \text{error}(T) + \alpha \, \lvert T \rvert$$
+
+Es decir, el error del árbol más una penalización por cada hoja. Con $\alpha = 0$ se conserva el árbol completo y, a medida que $\alpha$ crece, se podan más ramas hasta quedar solo la raíz. El valor de $\alpha$ se elige con validación cruzada.
+
+#### 2.7 Importancia de las variables
+
+La importancia de una variable es la suma de las reducciones de impureza $\Delta I$ de todos los cortes que la usan, ponderadas por el tamaño de cada nodo y normalizadas para que todas las importancias sumen 1.
+
+---
+
+### 3. Aplicación en el código
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.model_selection import train_test_split
+from itertools import product
+```
+
+- **numpy** y **pandas** sirven, como antes, para los cálculos y las tablas.
+- **DecisionTreeClassifier** es el modelo de árbol para clasificación. Para regresión existe DecisionTreeRegressor, que se usa igual.
+- **export_text** imprime el árbol como reglas escritas, lo que permite leerlo.
+- **train_test_split** separa los datos en una parte para entrenar y otra para probar.
+- **itertools** arma las combinaciones de valores con product, útil para probar varios hiperparámetros.
+
+#### 3.1 Ejemplo
+
+Con las mismas 16 conexiones de la sección de boosting:
+
+```python
+datos = pd.DataFrame({
+    'intentos_por_minuto': [2, 3, 5, 4, 6, 3, 2, 50, 80, 120, 90, 150, 70, 5, 60, 110],
+    'puertos_distintos':   [1, 1, 2, 1, 2, 1, 1, 40, 60, 200, 35, 150, 80, 3, 25, 90],
+    'sospechoso':          [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1]
+})
+
+X = datos[['intentos_por_minuto', 'puertos_distintos']]
+y = datos['sospechoso']
+
+arbol = DecisionTreeClassifier(max_depth=2, random_state=1)
+arbol.fit(X, y)
+
+nuevos = pd.DataFrame({'intentos_por_minuto': [90, 4], 'puertos_distintos': [45, 2]})
+
+print(arbol.predict_proba(nuevos)[:, 1])
+print(arbol.predict(nuevos))
+print(export_text(arbol, feature_names=list(X.columns)))
+```
+
+DecisionTreeClassifier crea el modelo vacío. max_depth=2 permite como máximo dos preguntas seguidas y random_state=1 fija el desempate cuando dos cortes sirven igual. fit entrena el modelo. predict_proba da la probabilidad de que sea sospechosa, predict da la clase y export_text escribe las reglas del árbol.
+
+Se ejecutó esto y salió:
+
+```
+[1. 0.]
+[1 0]
+|--- puertos_distintos <= 14.00
+|   |--- class: 0
+|--- puertos_distintos >  14.00
+|   |--- class: 1
+```
+
+Aunque se permitieron dos niveles, el árbol hizo una sola pregunta: con puertos distintos $\le 14$ la conexión es normal y con más es sospechosa. Es el mismo corte que ganó en la sección 2.4. El valor 14 es el punto medio entre 3, el mayor número de puertos de una conexión normal, y 25, el menor de una sospechosa. Como las dos hojas ya eran puras, el árbol no siguió dividiendo. Con ese corte, la conexión de 45 puertos queda como sospechosa con probabilidad 1 y la de 2 puertos como normal con probabilidad 0.
+
+---
+
+### 4. Ejemplo 1: árbol con dos variables
+
+Se usan los mismos 400 datos inventados de la sección de boosting:
+
+```python
+np.random.seed(1)
+n = 400
+
+datos = pd.DataFrame({
+    'intentos_por_minuto': np.random.randint(1, 200, n),
+    'puertos_distintos': np.random.randint(1, 100, n),
+    'hora': np.random.randint(0, 24, n),
+    'bytes_promedio': np.random.randint(40, 1500, n)
+})
+
+z = 0.05 * datos['intentos_por_minuto'] + 0.1 * datos['puertos_distintos'] - 10
+probabilidad = 1 / (1 + np.exp(-z))
+datos['sospechoso'] = (np.random.uniform(size=n) < probabilidad).astype(int)
+```
+
+Ahora se entrena un árbol de profundidad 3 con las dos columnas que sí importan:
+
+```python
+predictores = ['intentos_por_minuto', 'puertos_distintos']
+X = datos[predictores]
+y = datos['sospechoso']
+
+arbol = DecisionTreeClassifier(max_depth=3, random_state=1)
+arbol.fit(X, y)
+
+print(export_text(arbol, feature_names=predictores, show_weights=True))
+
+nuevos = pd.DataFrame({'intentos_por_minuto': [150, 10], 'puertos_distintos': [80, 5]})
+print(arbol.predict_proba(nuevos)[:, 1])
+print(dict(zip(predictores, arbol.feature_importances_.round(3))))
+```
+
+show_weights=True añade a cada hoja cuántas conexiones normales y sospechosas quedaron en ella. Se ejecutó esto y salió:
+
+```
+|--- puertos_distintos <= 51.50
+|   |--- intentos_por_minuto <= 122.50
+|   |   |--- intentos_por_minuto <= 108.50
+|   |   |   |--- weights: [125.00, 4.00] class: 0
+|   |   |--- intentos_por_minuto >  108.50
+|   |   |   |--- weights: [10.00, 3.00] class: 0
+|   |--- intentos_por_minuto >  122.50
+|   |   |--- puertos_distintos <= 10.50
+|   |   |   |--- weights: [16.00, 1.00] class: 0
+|   |   |--- puertos_distintos >  10.50
+|   |   |   |--- weights: [22.00, 48.00] class: 1
+|--- puertos_distintos >  51.50
+|   |--- intentos_por_minuto <= 79.00
+|   |   |--- puertos_distintos <= 79.00
+|   |   |   |--- weights: [29.00, 10.00] class: 0
+|   |   |--- puertos_distintos >  79.00
+|   |   |   |--- weights: [6.00, 19.00] class: 1
+|   |--- intentos_por_minuto >  79.00
+|   |   |--- puertos_distintos <= 52.50
+|   |   |   |--- weights: [1.00, 4.00] class: 1
+|   |   |--- puertos_distintos >  52.50
+|   |   |   |--- weights: [1.00, 101.00] class: 1
+
+[0.99019608 0.03100775]
+{'intentos_por_minuto': 0.406, 'puertos_distintos': 0.594}
+```
+
+El árbol se lee de arriba abajo. La primera pregunta es si los puertos distintos son más de 51.5. Si no lo son, la mayoría de las conexiones es normal, salvo la hoja de más de 122.5 intentos por minuto y más de 10.5 puertos, donde 48 de 70 son sospechosas. Si pasan de 51.5 puertos, la mayoría son sospechosas, salvo las de pocos intentos por minuto y menos de 79 puertos.
+
+La conexión con 150 intentos a 80 puertos cae en la última hoja, que tiene 101 sospechosas y 1 normal, y por eso su probabilidad es 101/102 = 0.99. La de 10 intentos a 5 puertos cae en la primera, con 4 sospechosas y 125 normales, y su probabilidad es 4/129 = 0.03. Las importancias muestran que el árbol usa más los puertos distintos (59 %) que los intentos por minuto (41 %).
+
+---
+
+### 5. Ejemplo 2: sobreajuste
+
+Ahora el árbol recibe las cuatro columnas, incluidas hora y bytes_promedio, que no influyen en nada, y se deja crecer sin límite:
+
+```python
+predictores = ['intentos_por_minuto', 'puertos_distintos', 'hora', 'bytes_promedio']
+X = datos[predictores]
+y = datos['sospechoso']
+
+X_entren, X_prueba, y_entren, y_prueba = train_test_split(X, y, test_size=100, random_state=0)
+
+completo = DecisionTreeClassifier(random_state=1)
+completo.fit(X_entren, y_entren)
+
+print('entrenamiento: ', np.mean(completo.predict(X_entren) != y_entren))
+print('prueba: ', np.mean(completo.predict(X_prueba) != y_prueba))
+print('profundidad: ', completo.get_depth())
+print('hojas: ', completo.get_n_leaves())
+print(dict(zip(predictores, completo.feature_importances_.round(3))))
+```
+
+La separación es la misma del boosting: 300 conexiones para entrenar y 100 para probar. El error es la proporción de predicciones distintas de la clase real. Sin max_depth, el árbol sigue dividiendo hasta que todas las hojas son puras. Se ejecutó esto y salió:
+
+```
+entrenamiento:  0.0
+prueba:  0.14
+profundidad:  9
+hojas:  43
+{'intentos_por_minuto': 0.415, 'puertos_distintos': 0.495, 'hora': 0.045, 'bytes_promedio': 0.046}
+```
+
+En entrenamiento no falla nunca, pero con conexiones que no vio falla el 14 %. Para lograr esos cero errores necesitó 9 niveles y 43 hojas, y hasta usó las columnas hora y bytes_promedio, que son puro ruido, con importancias cercanas al 4.5 % cada una. Eso es sobreajuste: el árbol memorizó los datos, incluido el azar.
+
+---
+
+### 6. Ejemplo 3: controlar el tamaño del árbol
+
+La primera forma de evitar el sobreajuste es limitar la profundidad. Se entrenan árboles de distinta profundidad y se compara su error en entrenamiento y en prueba:
+
+```python
+filas = []
+for prof in [1, 2, 3, 4, 6, 8, 10]:
+    m = DecisionTreeClassifier(max_depth=prof, random_state=1)
+    m.fit(X_entren, y_entren)
+    filas.append({
+        'max_depth': prof,
+        'hojas': m.get_n_leaves(),
+        'error_entren': np.mean(m.predict(X_entren) != y_entren),
+        'error_prueba': np.mean(m.predict(X_prueba) != y_prueba)
+    })
+
+print(pd.DataFrame(filas).round(3))
+```
+
+Se ejecutó esto y salió:
+
+```
+   max_depth  hojas  error_entren  error_prueba
+0          1      2         0.220          0.28
+1          2      4         0.190          0.25
+2          3      8         0.117          0.16
+3          4     16         0.093          0.14
+4          6     33         0.043          0.15
+5          8     42         0.003          0.14
+6         10     43         0.000          0.14
+```
+
+El error de entrenamiento siempre baja al crecer el árbol, pero el de prueba deja de mejorar desde profundidad 4. Con un árbol de 16 hojas se logra el mismo 14 % de error que con uno de 43. Un árbol más grande no predice mejor, solo memoriza más. Con solo 100 conexiones de prueba, una diferencia de 1 punto equivale a una conexión, así que estas diferencias pequeñas no son concluyentes.
+
+La segunda forma es la poda por costo-complejidad de la sección 2.6. En scikit-learn se controla con ccp_alpha, el $\alpha$ de la fórmula:
+
+```python
+ruta = DecisionTreeClassifier(random_state=1).cost_complexity_pruning_path(X_entren, y_entren)
+alphas = ruta.ccp_alphas
+
+filas = []
+for a in alphas[::3]:
+    m = DecisionTreeClassifier(random_state=1, ccp_alpha=a)
+    m.fit(X_entren, y_entren)
+    filas.append({
+        'ccp_alpha': a,
+        'hojas': m.get_n_leaves(),
+        'error_prueba': np.mean(m.predict(X_prueba) != y_prueba)
+    })
+
+print(pd.DataFrame(filas).round(4))
+```
+
+cost_complexity_pruning_path calcula los valores de $\alpha$ en los que el árbol pierde una rama, y aquí se prueba uno de cada tres. Se ejecutó esto y salió:
+
+```
+   ccp_alpha  hojas  error_prueba
+0     0.0000     43          0.14
+1     0.0031     36          0.14
+2     0.0033     28          0.15
+3     0.0044     22          0.14
+4     0.0057     17          0.13
+5     0.0064     13          0.14
+6     0.0093      7          0.16
+7     0.0251      4          0.25
+8     0.1550      1          0.54
+```
+
+Con $\alpha = 0$ queda el árbol completo de 43 hojas. Al subir $\alpha$ el árbol se poda hasta 13 o 17 hojas sin perder precisión. Desde alrededor de 0.009 empieza a empeorar, y con $\alpha = 0.155$ queda solo la raíz, que predice siempre la misma clase y falla el 54 %.
+
+---
+
+### 7. Ejemplo 4: validación cruzada
+
+Para elegir los hiperparámetros sin depender de una sola separación de los datos se usa validación cruzada con $K = 5$ pliegues, como en la sección 2.5 de boosting. Se prueban 9 combinaciones de profundidad máxima y mínimo de observaciones por hoja:
+
+```python
+np.random.seed(1)
+grupo = np.random.choice(5, size=len(datos), replace=True)
+
+errores = []
+for prof, hoja in product([2, 4, 8], [1, 10, 25]):
+    errores_pliegues = []
+    for k in range(5):
+        entren = grupo != k
+        prueba = grupo == k
+        m = DecisionTreeClassifier(max_depth=prof, min_samples_leaf=hoja, random_state=1)
+        m.fit(X[entren], y[entren])
+        errores_pliegues.append(np.mean(m.predict(X[prueba]) != y[prueba]))
+    errores.append({
+        'max_depth': prof,
+        'min_samples_leaf': hoja,
+        'error_promedio': np.mean(errores_pliegues)
+    })
+
+tabla_errores = pd.DataFrame(errores)
+print(tabla_errores.round(3))
+```
+
+np.random.choice reparte las conexiones al azar en 5 grupos. Cada combinación se entrena 5 veces, apartando un grupo distinto para probar, y se promedian los 5 errores. min_samples_leaf=10 obliga a que cada hoja tenga al menos 10 conexiones. Se ejecutó esto y salió:
+
+```
+   max_depth  min_samples_leaf  error_promedio
+0          2                 1           0.221
+1          2                10           0.221
+2          2                25           0.221
+3          4                 1           0.185
+4          4                10           0.156
+5          4                25           0.192
+6          8                 1           0.169
+7          8                10           0.138
+8          8                25           0.192
+```
+
+La mejor combinación es max_depth=8 con min_samples_leaf=10, con 13.8 % de error. Con profundidad 2 el árbol es demasiado simple y falla el 22 % sin importar la otra opción. Con min_samples_leaf=25 las hojas son demasiado grandes y también empeora. El mejor resultado aparece con un árbol profundo, pero con hojas de tamaño razonable: ambas opciones se complementan.
+
+---
+
+### 8. Hiperparámetros de un árbol de decisión
+
+| Hiperparámetro | Qué controla |
+| --- | --- |
+| max_depth | Profundidad máxima del árbol. Es la forma más directa de limitar la complejidad. Si no se indica, el árbol crece sin límite. |
+| min_samples_split | Mínimo de observaciones que debe tener un nodo para poder dividirse. |
+| min_samples_leaf | Mínimo de observaciones por hoja. Evita hojas con muy pocos casos, que suelen ser ruido. |
+| max_features | Cuántas variables se consideran en cada corte. Con todas es un árbol normal; con menos se usa en el bosque aleatorio. |
+| criterion | Medida de impureza: gini o entropy en clasificación; squared_error en regresión. |
+| ccp_alpha | Penalización por hoja en la poda por costo-complejidad. Con 0 no se poda. |
+
+---
+
+### 9. Conclusiones
+
+- Un árbol de decisión predice con una secuencia de preguntas de sí o no sobre las variables y da una predicción por cada hoja: la clase más frecuente en clasificación y el promedio en regresión.
+- En cada nodo el árbol elige el corte que más reduce la impureza, medida con Gini, entropía o varianza. Lo hace de forma voraz, un nodo a la vez.
+- Es fácil de leer y no requiere escalar las variables, pero es inestable y sobreajusta si crece sin límite: en el ejemplo, error 0 en entrenamiento y 14 % en prueba.
+- La complejidad se controla con la profundidad máxima, el mínimo de observaciones por hoja o la poda por costo-complejidad, y sus valores se eligen con validación cruzada.
+- La varianza alta de un solo árbol es el motivo del bagging y del bosque aleatorio, que combinan muchos árboles para estabilizar la predicción.
+
+---
+
 ## Bagging and the Ramdom Forest
 
 ### 1. Introducción
@@ -26,8 +439,8 @@ Dado un conjunto de entrenamiento con $$N$$ registros y $$P$$ variables predicto
    - **Regresión o Estimación de Probabilidades**:
 
 $$\hat{f}(X) = \frac{1}{M} \sum_{m=1}^{M} f_m(X)$$
-     
-   - **Clasificación**: Se aplica **voto mayoritario** (*majority vote*) sobre las predicciones de las $$M$$ reglas $$f_m(X)$$.
+
+- **Clasificación**: Se aplica **voto mayoritario** (*majority vote*) sobre las predicciones de las $$M$$ reglas $$f_m(X)$$.
 
 #### 2.2. Ejemplo
 
@@ -91,11 +504,10 @@ El boosting es una técnica para crear un ensamble de modelos, es decir, un conj
 Existen tres variantes principales:
 
 | Variante | Descripción |
-|---|---|
+| --- | --- |
 | AdaBoost | Aumenta el peso de las observaciones mal clasificadas para que el siguiente modelo se concentre en ellas. |
 | Gradient boosting | Plantea el problema como la minimización de una función de costo. Cada modelo nuevo se ajusta al pseudo-residuo, es decir, a lo que aún no explica el conjunto. |
 | Stochastic gradient boosting | Igual que el anterior, pero en cada ronda usa una muestra aleatoria de filas y de columnas. Es la variante más general y la más usada. |
-
 
 ### 2. Comprenderlo matemáticamente
 
@@ -104,7 +516,7 @@ Esta parte explica las fórmulas con palabras y con números sencillos. Lo impor
 #### 2.1 Notación
 
 | Símbolo | Significado |
-|---|---|
+| --- | --- |
 | $N$ | Número de filas, o sea, observaciones |
 | $i$ | Número de una fila, $i = 1, 2, \dots, N$ |
 | $M$ | Número máximo de modelos |
@@ -169,7 +581,7 @@ Reescalar quiere decir dividir cada peso entre la suma de todos, para que los pe
 Ejemplo: $e^{1.39} \approx 4$, así que el peso de D se multiplica por 4.
 
 | Observación | A | B | C | D mal clasificada | E | Suma |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | Peso antes | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 | 1 |
 | Peso multiplicado | 0.2 | 0.2 | 0.2 | 0.8 | 0.2 | 1.6 |
 | Peso reescalado entre 1.6 | 0.125 | 0.125 | 0.125 | 0.5 | 0.125 | 1 |
@@ -183,7 +595,7 @@ $$F = \alpha_1 f_1 + \alpha_2 f_2 + \cdots + \alpha_M f_M$$
 **Ejemplo con dos modelos.** Supongamos que el segundo modelo, entrenado con los pesos nuevos, solo falla en A:
 
 | | A | B | C | D | E | Error | Confianza |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | Pesos con que entrena el modelo 1 | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 | $e_1 = 0.2$, falla D | $\alpha_1 = 1.39$ |
 | Pesos con que entrena el modelo 2 | 0.125 | 0.125 | 0.125 | 0.5 | 0.125 | $e_2 = 0.125$, falla A | $\alpha_2 = \log(7) \approx 1.95$ |
 
@@ -206,7 +618,7 @@ $$r_i = y_i - F_{m-1}(x_i) \qquad\qquad F_m = F_{m-1} + \eta\, h_m$$
 Ejemplo: el valor real es 100, el primer modelo predice 80 y se usa $\eta = 0.5$. Para simplificar, se supone que cada árbol aprende exactamente el residuo.
 
 | Ronda | Predicción del ensamble | Residuo, 100 menos la predicción | Lo que se suma, $0.5 \times$ residuo |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | 80 | 20 | 10 |
 | 2 | 90 | 10 | 5 |
 | 3 | 95 | 5 | 2.5 |
@@ -246,7 +658,7 @@ Cómo leerlas:
 Ejemplo con $b_1 = 3$, $b_2 = -2$ y un parámetro de castigo igual a 10:
 
 | Tipo | Cálculo | Castigo |
-|---|---|---|
+| --- | --- | --- |
 | L2 ridge | $10 \times (3^2 + (-2)^2) = 10 \times 13$ | 130 |
 | L1 lasso | $10 \times (\lvert 3 \rvert + \lvert -2 \rvert) = 10 \times 5$ | 50 |
 
@@ -265,7 +677,7 @@ $$\text{error} = \frac{1}{n}\sum_{i=1}^{n} \mathbf{1}\big(\,|y_i - p_i| > 0.5\,\
 Ejemplo con 4 filas:
 
 | Fila | Real $y$ | Predicción $p$ | $\lvert y - p \rvert$ | ¿Error? |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 1 | 1 | 0.9 | 0.1 | No |
 | 2 | 0 | 0.2 | 0.2 | No |
 | 3 | 0 | 0.6 | 0.6 | Sí |
@@ -282,7 +694,6 @@ donde $E_k$ es el error medido en el pliegue $k$. Por ejemplo, con 5 pliegues y 
 ---
 
 ### 3. Aplicación en el código
-
 
 ```python
 import numpy as np
@@ -456,7 +867,7 @@ print('prueba: ', np.mean(abs(y_prueba - pred_prueba) > 0.5))
 ```
 
 | Argumento | Antes | Ahora | Efecto |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | reg_lambda | 0 | 10 | Aplica una penalización L2 a los árboles complejos. |
 | learning_rate | 0.3 | 0.1 | Reduce el tamaño de cada paso. |
 | subsample | 1 | 0.63 | Cada árbol usa solo una parte de las filas. |
@@ -528,7 +939,7 @@ La mejor es eta=0.1 con max_depth=2, con 14.6 % de error. Las demás quedan entr
 ### 8. Hiperparámetros de XGBoost
 
 | Hiperparámetro | Qué controla |
-|---|---|
+| --- | --- |
 | eta / learning_rate | Factor de contracción entre 0 y 1. Controla el tamaño de cada paso. Con datos ruidosos se recomiendan valores pequeños, como 0.1. |
 | nrounds / n_estimators | Número de rondas, es decir, de árboles. Si eta es pequeño, se necesitan más rondas. |
 | max_depth | Profundidad máxima del árbol. En boosting se usan árboles poco profundos, lo que evita interacciones complejas producidas por el ruido. |
