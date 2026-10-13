@@ -6,6 +6,82 @@
 
 ## Bagging and the Ramdom Forest
 
+### 1. Introducción
+
+Los métodos de ensamble (ensemble learning) parten de la analogía del experimento de Sir Francis Galton (1906) sobre la "sabiduría de las multitudes" (Wisdom of Crowds), donde el promedio de múltiples estimaciones individuales supera en precisión a cualquier estimación aislada. En árboles de decisión, combinar las predicciones de múltiples modelos reduce significativamente la varianza sin aumentar el sesgo.
+
+### 2. Bagging (Bootstrap Aggregating)
+
+Introducido por Leo Breiman en 1996, el Bagging consiste en entrenar múltiples modelos predictivos de forma independiente utilizando diferentes submuestras de datos generadas mediante muestreo bootstrap (muestreo aleatorio con reemplazo)
+
+#### 2.1. Definición matemática y algoritmo
+
+Dado un conjunto de entrenamiento con $$N$$ registros y $$P$$ variables predictoras $$X = (X_1, X_2, \dots, X_P)$$:
+
+1. Se fijan $$M$$ (número de modelos) y $$n$$ ($$n < N$$, tamaño del subsistema).
+2. Para cada iteración $$m = 1, \dots, M$$:
+   - Se extrae una muestra bootstrap de tamaño $$n$$ con reemplazo para formar la submuestra $$(Y_m, X_m)$$.
+   - Se entrena un modelo individual para obtener la regla de decisión $$f_m(X)$$.
+3. **Predicción Agregada**:
+   - **Regresión o Estimación de Probabilidades**:
+
+$$\hat{f}(X) = \frac{1}{M} \sum_{m=1}^{M} f_m(X)$$
+     
+   - **Clasificación**: Se aplica **voto mayoritario** (*majority vote*) sobre las predicciones de las $$M$$ reglas $$f_m(X)$$.
+
+#### 2.2. Ejemplo
+
+```python
+from sklearn.ensemble import BaggingClassifier
+from sklearn.tree import DecisionTreeClassifier
+
+# Definición del modelo de Bagging con árboles de decisión
+model_bagging = BaggingClassifier(
+    estimator=DecisionTreeClassifier(),
+    n_estimators=500,
+    random_state=1
+)
+
+# Entrenamiento y predicción
+[se quitó el vínculo sospechoso](X_train, y_train)
+y_pred = model_bagging.predict(X_test)
+```
+
+### 3. Random Forest
+
+El Random Forest extiende el principio de bagging sobre árboles de decisión agregando una segunda capa de aleatorización: la selección aleatoria de variables (*feature sampling*) en cada división de nodo (*split*). Esto descorrelaciona los árboles entre sí, reduciendo la varianza global del ensemble de manera más efectiva que el bagging simple.
+
+#### 3.1 Definición matemática y algoritmo
+
+1. Se extrae una muestra bootstrap con reemplazo del conjunto de datos.
+2. En cada división de nodo, en lugar de evaluar los $$P$$ predictores disponibles, el algoritmo selecciona al azar un subconjunto de $$p < P$$ variables sin reemplazo.
+   - **Regla empírica recomendada**: $$p = \sqrt{P}$$ para problemas de clasificación.
+3. Se evalúa el criterio de división (p. ej., minimización de la **Impureza Gini** o **Entropía**) únicamente dentro de las $$p$$ variables elegidas para determinar el corte óptimo $$s_{j_k}$$.
+4. Se hace crecer el árbol completamente sin podar.
+5. Se repite el proceso para los $$M$$ árboles y se promedian/votan los resultados:
+
+$$\hat{f}_{rf}(X) = \frac{1}{M} \sum_{m=1}^{M} f_m(X; \theta_m)$$
+
+(donde $$\theta_m$$ representa la aleatorización tanto de datos como de variables en el árbol $$m$$ ).
+
+#### 3.2. Ejemplo
+
+```python
+from sklearn.ensemble import RandomForestClassifier
+
+# Crear y entrenar el modelo Random Forest
+rf = RandomForestClassifier(
+    n_estimators=500,
+    max_features='sqrt',  # mtry = sqrt(P)
+    random_state=1,
+    oob_score=True
+)
+[se quitó el vínculo sospechoso](X_train, y_train)
+
+# Evaluación fuera de bolsa (Out-of-Bag)
+print(f"Precisión Out-of-Bag (OOB): {rf.oob_score_:.4f}")
+```
+
 ## Boosting
 
 ### 1. Introducción
