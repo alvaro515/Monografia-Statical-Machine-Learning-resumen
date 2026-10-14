@@ -2,6 +2,276 @@
 
 ## K-Nearest Neighbors
 
+### 1. Introducción
+
+**K-Nearest Neighbors (KNN)**, o **K vecinos más cercanos**, predice una observación a partir de los casos conocidos que más se le parecen. Por ejemplo, para estimar si una persona devolverá un préstamo, busca personas con características similares y observa qué ocurrió con sus préstamos.
+
+Es un método de **aprendizaje supervisado**: necesita datos con una respuesta conocida. No ajusta una ecuación global como la regresión; conserva los ejemplos de entrenamiento y calcula las distancias cuando necesita predecir. Por eso se considera un método de aprendizaje basado en instancias.
+
+| Elemento | Qué es |
+| --- | --- |
+| Observación | Una fila de datos, por ejemplo, un préstamo. |
+| Predictores | Las variables utilizadas para comparar observaciones. |
+| Distancia | La medida numérica de qué tan diferentes son dos observaciones. |
+| $K$ | La cantidad de vecinos que participan en la predicción. |
+| Respuesta | La clase o el valor numérico que se quiere predecir. |
+
+El procedimiento tiene tres pasos: calcular las distancias al caso nuevo, seleccionar los $K$ casos más cercanos y combinar sus respuestas. En **clasificación** se elige la clase más frecuente; en **regresión** se puede promediar el valor de los vecinos. En la versión sin ponderación, cada vecino tiene el mismo voto.
+
+Si $N_K(x)$ representa los vecinos de una observación $x$, la probabilidad estimada de una clase $c$ es:
+
+$$
+\widehat{P}(Y=c\mid x)=\frac{1}{K}\sum_{i\in N_K(x)}\mathbf{1}(y_i=c)
+$$
+
+La expresión cuenta cuántos vecinos pertenecen a esa clase y divide entre $K$. Es una proporción local, no una garantía de lo que ocurrirá con una persona concreta.
+
+---
+
+### 2. A Small Example: Predicting Loan Default
+
+El capítulo 6 de *Practical Statistics for Data Scientists* presenta un ejemplo con `loan200`, una muestra de 200 préstamos. La respuesta `outcome` distingue entre **`paid off`**, préstamo pagado, y **`default`**, incumplimiento de pago. Se reserva el primer préstamo para predecirlo usando los otros 199 y se buscan sus 20 vecinos más cercanos.
+
+#### 2.1 Variables del ejemplo: DTI y payment_inc_ratio
+
+| Variable | Qué representa |
+| --- | --- |
+| **DTI (`dti`, debt-to-income)** | Relación entre los pagos mensuales de las deudas y el ingreso mensual del prestatario, expresada en porcentaje. Resume la carga de deuda respecto de sus ingresos. |
+| **`payment_inc_ratio`** | Relación entre la cuota del préstamo solicitado y el ingreso mensual, también expresada en porcentaje. Resume cuánto del ingreso exige ese préstamo. |
+
+La diferencia es que DTI considera la carga de las deudas, mientras que `payment_inc_ratio` se concentra en la cuota del préstamo analizado. Como ejemplo ilustrativo, una cuota de 200 y un ingreso mensual de 2000 dan `payment_inc_ratio = 10`, es decir, 10 %.
+
+#### 2.2 Preparación para ejecutar los ejemplos
+
+Los cuatro bloques de ejemplos que siguen son extractos del **código Python oficial del capítulo 6**, conservados sin modificar. La preparación siguiente es una adaptación mínima para ejecutarlos en orden: se necesitan `pandas`, `scikit-learn` y los archivos `loan200.csv` y `loan_data.csv.gz` del directorio `data` del repositorio del libro.
+
+```python
+from pathlib import Path
+import pandas as pd
+from sklearn import preprocessing
+from sklearn.neighbors import KNeighborsClassifier
+
+DATA = Path('data')
+LOAN200_CSV = DATA / 'loan200.csv'
+LOAN_DATA_CSV = DATA / 'loan_data.csv.gz'
+```
+
+**Comentario del bloque:** prepara la lectura de datos y las herramientas de KNN y estandarización. Si los archivos están en otra carpeta, se cambia `DATA`; esta preparación no entrena ningún modelo.
+
+#### 2.3 Código: predecir el impago
+
+```python
+loan200 = pd.read_csv(LOAN200_CSV)
+ 
+predictors = ['payment_inc_ratio', 'dti']
+outcome = 'outcome'
+
+
+newloan = loan200.loc[0:0, predictors]
+X = loan200.loc[1:, predictors]
+y = loan200.loc[1:, outcome]
+
+knn = KNeighborsClassifier(n_neighbors=20)
+knn.fit(X, y)
+knn.predict(newloan)
+print(knn.predict_proba(newloan))
+```
+
+**Comentario del bloque:** separa el primer préstamo, entrena KNN con los otros 199 y consulta sus 20 vecinos para obtener una clase y las probabilidades. La observación que se predice queda fuera del entrenamiento, así que no puede votar por sí misma. `predict` devuelve la clase; `predict_proba` devuelve las proporciones por clase en el orden de `knn.classes_`.
+
+En un ejemplo ilustrativo, si 12 de los 20 vecinos pagaron y 8 incumplieron, la predicción sería `paid off`, con una proporción de pago de $12/20=0.60$. Estos números explican la votación; no se presentan como una salida ejecutada del archivo.
+
+---
+
+### 3. Distance Metrics: Euclidean y Manhattan
+
+La elección de distancia define quién cuenta como vecino. Para dos observaciones $x=(x_1,\ldots,x_p)$ y $z=(z_1,\ldots,z_p)$, con $p$ predictores:
+
+#### 3.1 Distancia euclidiana (Euclidean)
+
+$$
+d_E(x,z)=\sqrt{\sum_{j=1}^{p}(x_j-z_j)^2}
+$$
+
+Es la distancia en línea recta. Se restan los valores de cada variable, se elevan al cuadrado, se suman y se obtiene la raíz cuadrada. En dos variables corresponde al teorema de Pitágoras.
+
+#### 3.2 Distancia Manhattan
+
+$$
+d_M(x,z)=\sum_{j=1}^{p}|x_j-z_j|
+$$
+
+Suma las diferencias absolutas, como recorrer calles horizontales y verticales de una cuadrícula. No eleva las diferencias al cuadrado, por lo que las diferencias grandes tienen menos peso relativo que en la distancia euclidiana.
+
+Por ejemplo, entre $(1,2)$ y $(4,6)$ la distancia euclidiana es $\sqrt{3^2+4^2}=5$, mientras que Manhattan es $3+4=7$. Ambas miden cercanía, pero pueden producir conjuntos de vecinos diferentes.
+
+En `KNeighborsClassifier`, la configuración predeterminada usa Minkowski con `p=2`, equivalente a Euclidean; con `p=1` equivale a Manhattan. Estas son **métricas de distancia**, no medidas de acierto del modelo. El error de clasificación se evalúa aparte con datos no usados para entrenar.
+
+---
+
+### 4. One Hot Encoder
+
+KNN necesita comparar valores numéricos. Si una variable tiene categorías sin orden, como el propósito de un préstamo, asignarles números 1, 2 y 3 inventaría una distancia y un orden que no existen.
+
+**One-hot encoding** crea una columna por categoría y utiliza 1 si la observación pertenece a ella y 0 si no:
+
+| Propósito | automóvil | educación | vivienda |
+| --- | --- | --- | --- |
+| automóvil | 1 | 0 | 0 |
+| educación | 0 | 1 | 0 |
+| vivienda | 0 | 0 | 1 |
+
+En Python se puede hacer con `OneHotEncoder` o `pd.get_dummies`. Para KNN, conservar todas las columnas permite tratar simétricamente las categorías: entre dos categorías distintas del ejemplo, la distancia euclidiana es $\sqrt{2}$. La codificación se aprende con los datos de entrenamiento y se aplica de la misma manera a los casos nuevos.
+
+El ejemplo inicial no necesita esta transformación porque `dti` y `payment_inc_ratio` ya son numéricos. Convertir categorías en columnas tampoco resuelve por sí solo las diferencias de escala con las demás variables.
+
+---
+
+### 5. Standardization (Normalization, Z-Scores)
+
+La distancia depende de las unidades. Si una variable representa dinero en miles y otra un porcentaje, la primera puede dominar la búsqueda de vecinos aunque no sea más útil para predecir. En el ejemplo ampliado aparecen `revol_bal`, saldo de crédito revolvente, y `revol_util`, porcentaje de utilización de ese crédito.
+
+#### 5.1 Búsqueda de vecinos antes de estandarizar
+
+```python
+loan_data = pd.read_csv(LOAN_DATA_CSV)
+loan_data = loan_data.drop(columns=['Unnamed: 0', 'status'])
+loan_data['outcome'] = pd.Categorical(loan_data['outcome'], 
+                                      categories=['paid off', 'default'], 
+                                      ordered=True)
+
+
+predictors = ['payment_inc_ratio', 'dti', 'revol_bal', 'revol_util']
+outcome = 'outcome'
+
+newloan = loan_data.loc[0:0, predictors]
+print(newloan)
+X = loan_data.loc[1:, predictors]
+y = loan_data.loc[1:, outcome]
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X, y)
+
+nbrs = knn.kneighbors(newloan)
+print(X.iloc[nbrs[1][0], :])
+```
+
+**Comentario del bloque:** carga los préstamos y busca cinco vecinos usando cuatro predictores en sus unidades originales. Imprime las características de esos vecinos para observar el efecto de la escala: las diferencias de `revol_bal` pueden pesar mucho más que las diferencias entre porcentajes. `kneighbors` devuelve distancias y posiciones; esas posiciones permiten recuperar las filas con `iloc`.
+
+#### 5.2 Estandarización mediante z-scores
+
+La estandarización transforma cada variable restando su media y dividiendo entre su desviación estándar:
+
+$$
+z_{ij}=\frac{x_{ij}-\mu_j}{\sigma_j}
+$$
+
+Aquí $\mu_j$ y $\sigma_j$ se calculan con los datos de entrenamiento. Un valor transformado de 2 significa que está dos desviaciones estándar por encima de la media. Las variables no constantes quedan con media 0 y desviación estándar 1 en entrenamiento. Esto pone sus escalas en condiciones comparables; no convierte sus distribuciones en normales ni elimina los valores atípicos.
+
+El capítulo agrupa este tema bajo *Standardization (Normalization, Z-Scores)*. Conviene distinguirlo de la normalización **min-max**, que transforma los datos de entrenamiento al intervalo $[0,1]$:
+
+$$
+x'_{ij}=\frac{x_{ij}-\min(X_j)}{\max(X_j)-\min(X_j)}
+$$
+
+Los z-scores no están limitados a ese intervalo. Ambos métodos cambian la escala, pero lo hacen con referencias diferentes.
+
+#### 5.3 Código: StandardScaler y nuevos vecinos
+
+```python
+newloan = loan_data.loc[0:0, predictors]
+X = loan_data.loc[1:, predictors]
+y = loan_data.loc[1:, outcome]
+
+scaler = preprocessing.StandardScaler()
+scaler.fit(X * 1.0)
+
+X_std = scaler.transform(X * 1.0)
+newloan_std = scaler.transform(newloan * 1.0)
+
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_std, y)
+
+nbrs = knn.kneighbors(newloan_std)
+print(X.iloc[nbrs[1][0], :])
+```
+
+**Comentario del bloque:** aprende la media y la desviación de los datos de entrenamiento con `StandardScaler`, transforma tanto esos datos como el préstamo reservado y vuelve a buscar cinco vecinos. Ahora la distancia compara desviaciones respecto de la escala de cada variable. La tabla final muestra los vecinos en sus unidades originales para facilitar la comparación con el bloque anterior.
+
+El escalador se ajusta solo con `X`; al préstamo nuevo se le aplica la transformación ya aprendida. En validación cruzada debe repetirse este procedimiento dentro de cada pliegue para no utilizar información de la parte reservada para validar.
+
+---
+
+### 6. Choosing K: overfitting y oversmoothing
+
+$K$ controla cuánto detalle local utiliza el modelo. No existe un valor que funcione mejor en todos los problemas.
+
+| Elección | Qué ocurre | Riesgo |
+| --- | --- | --- |
+| $K$ pequeño, por ejemplo 1 | La respuesta depende de muy pocos casos y cambia fácilmente ante pequeñas variaciones. | **Overfitting** o sobreajuste: aprende también el ruido; baja el sesgo y aumenta la varianza. |
+| $K$ intermedio | Combina suficientes vecinos sin borrar todas las diferencias locales. | Puede equilibrar sesgo y varianza; se comprueba mediante validación. |
+| $K$ muy grande | Mezcla observaciones cada vez más alejadas y produce fronteras más suaves. | **Oversmoothing**, suavizado excesivo: pierde patrones relevantes; aumenta el sesgo y puede causar subajuste. |
+
+Si $K$ llega al total de observaciones de entrenamiento, todos los casos nuevos reciben la misma votación global. En clasificación, terminarían prediciéndose según la clase mayoritaria, salvo empates.
+
+Para elegirlo se prueban varios valores mediante **validación cruzada**, manteniendo separado un conjunto final de prueba. Una medida sencilla es la proporción de errores:
+
+$$
+\text{Error}=\frac{\text{número de predicciones incorrectas}}{\text{número de observaciones evaluadas}}
+$$
+
+En problemas con clases desbalanceadas también interesa revisar la matriz de confusión, precisión, recall y F1. Los valores 20 y 5 de los ejemplos ilustran el procedimiento; no implican que sean óptimos para cualquier conjunto de préstamos. Usar un $K$ impar puede evitar empates de votos en clasificación binaria sin ponderación, pero no reemplaza la validación.
+
+---
+
+### 7. KNN as a Feature Engine
+
+KNN también puede servir para **crear una variable predictora**. En lugar de usar su respuesta como decisión final, se resume la información de varios atributos en un puntaje y se entrega ese puntaje a otro modelo.
+
+El capítulo construye `borrower_score` a partir de `dti`, `revol_bal`, `revol_util`, `open_acc` y los indicadores `delinq_2yrs_zero` y `pub_rec_zero`. En conjunto describen deuda, utilización del crédito, cuentas abiertas y antecedentes crediticios. La proporción de impagos entre vecinos sintetiza el perfil del prestatario y puede incorporarse a una regresión logística o a un árbol junto con variables como `payment_inc_ratio`.
+
+#### 7.1 Código: borrower_score y predict_proba
+
+El siguiente extracto conserva la versión actual del repositorio oficial, omitiendo únicamente las instrucciones de la gráfica:
+
+```python
+loan_data = pd.read_csv(LOAN_DATA_CSV)
+loan_data = loan_data.drop(columns=['Unnamed: 0', 'status'])
+loan_data['outcome'] = pd.Categorical(loan_data['outcome'], 
+                                      categories=['paid off', 'default'], 
+                                      ordered=True)
+
+predictors = ['dti', 'revol_bal', 'revol_util', 'open_acc', 
+              'delinq_2yrs_zero', 'pub_rec_zero']
+outcome = 'outcome'
+
+X = loan_data[predictors]
+y = loan_data[outcome]
+
+knn = KNeighborsClassifier(n_neighbors=20)
+knn.fit(X, y)
+loan_data['borrower_score'] = knn.predict_proba(X)[:, 0]
+print(loan_data['borrower_score'].describe())
+```
+
+**Comentario del bloque:** entrena KNN con seis atributos, calcula para cada observación la proporción de una clase entre sus 20 vecinos y la guarda como `borrower_score`. `describe` resume la distribución del puntaje. Así, la salida de un modelo se convierte en la entrada de otro: esa es la relación con la ingeniería de características.
+
+**Interpretación del puntaje.** Las columnas de `predict_proba` siguen el orden de `knn.classes_`. Con estas etiquetas de texto, scikit-learn ordena las clases como `['default', 'paid off']`: `[:, 0]` corresponde a impago y `[:, 1]` a pago. La versión actual del código oficial usa `[:, 0]`; si se consulta una edición que muestra `[:, 1]`, debe interpretarse esa columna según la clase correspondiente. Un puntaje alto solo significa mayor riesgo cuando se toma la probabilidad de `default`.
+
+**Alcance del ejemplo.** Este bloque original no estandariza sus seis atributos y predice sobre los mismos datos con los que se ajustó, por lo que cada fila puede aparecer entre sus propios vecinos. Ilustra cómo crear la variable, pero no mide el rendimiento con casos nuevos. Para usarla al entrenar otro modelo, conviene generar los puntajes fuera de muestra, por pliegues, ajustando también el preprocesamiento dentro de cada pliegue. Así se evita que la respuesta de una fila influya en su propio puntaje.
+
+---
+
+### 8. Conclusiones
+
+- KNN predice comparando con observaciones conocidas y combinando las respuestas de sus vecinos.
+- La distancia, la codificación de categorías y la escala de las variables determinan qué significa parecerse.
+- Un $K$ pequeño puede sobreajustar; uno demasiado grande puede suavizar en exceso. Se elige con validación.
+- `predict_proba` expresa proporciones por clase y debe leerse junto con `classes_`.
+- KNN puede producir una predicción final o generar una característica como `borrower_score` para otros modelos.
+
+**Fuente:** Peter Bruce, Andrew Bruce y Peter Gedeck, *Practical Statistics for Data Scientists*, 2.ª edición, capítulo 6, sección K-Nearest Neighbors. Los extractos de Python proceden del [código oficial del capítulo 6](https://github.com/gedeck/practical-statistics-for-data-scientists/blob/master/python/code/Chapter%206%20-%20Statistical%20Machine%20Learning.py), © 2019 Peter C. Bruce, Andrew Bruce y Peter Gedeck, publicado bajo [GNU GPL v3](https://github.com/gedeck/practical-statistics-for-data-scientists/blob/master/LICENSE). Las explicaciones en español son una síntesis propia. Referencias de implementación: [KNeighborsClassifier](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KNeighborsClassifier.html), [StandardScaler](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html) y [OneHotEncoder](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.OneHotEncoder.html).
+
 ## Tree  Models
 
 ### 1. Introducción
